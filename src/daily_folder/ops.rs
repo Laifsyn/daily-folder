@@ -1,17 +1,18 @@
-//! Operaciones de dominio: recorrido de archivos, verificación de
-//! condiciones y creación de la carpeta "impresos".
+//! Domain operations: file traversal, condition checking,
+//! and creation of the "printed" folder.
 
 use std::path::{Path, PathBuf};
 
 use super::{
-    error::ImpresosError, link::ensure_link_for_date, settings::Settings, template::expand_template,
+    error::DaifoError, link::ensure_link_for_date, settings::Settings,
+    template::expand_template,
 };
 
 // ---------------------------------------------------------------------------
-// Helpers privados
+// Private helpers
 // ---------------------------------------------------------------------------
 
-/// Cuenta cuántos archivos contiene un directorio (no recursivo).
+/// Counts how many files a directory contains (non-recursive).
 fn count_files_in_dir(dir: &Path) -> Result<usize, std::io::Error> {
     let mut count = 0;
     let entries = std::fs::read_dir(dir)?;
@@ -24,17 +25,22 @@ fn count_files_in_dir(dir: &Path) -> Result<usize, std::io::Error> {
     Ok(count)
 }
 
-/// Determina si un directorio contiene al menos un archivo cuya extensión
-/// coincide con la lista de extensiones disparadoras.
-fn has_trigger_extension(dir: &Path, extensions: &[&str]) -> Result<bool, std::io::Error> {
+/// Determines whether a directory contains at least one file whose extension
+/// matches the trigger extension list.
+fn has_trigger_extension(
+    dir: &Path,
+    extensions: &[&str],
+) -> Result<bool, std::io::Error> {
     let entries = std::fs::read_dir(dir)?;
     for entry in entries {
         let entry = entry?;
         if entry.file_type()?.is_file() {
-            if let Some(ext) = entry.path().extension().and_then(|e| e.to_str()) {
+            if let Some(ext) = entry.path().extension().and_then(|e| e.to_str())
+            {
                 let ext_lower = ext.to_lowercase();
                 for trigger in extensions {
-                    let trigger_clean = trigger.trim_start_matches('.').to_lowercase();
+                    let trigger_clean =
+                        trigger.trim_start_matches('.').to_lowercase();
                     if ext_lower == trigger_clean {
                         return Ok(true);
                     }
@@ -46,19 +52,20 @@ fn has_trigger_extension(dir: &Path, extensions: &[&str]) -> Result<bool, std::i
 }
 
 // ---------------------------------------------------------------------------
-// API pública
+// Public API
 // ---------------------------------------------------------------------------
 
-/// Verifica si se debe crear la carpeta de impresos dentro de `dir`.
+/// Checks whether the prints folder should be created inside `dir`.
 ///
-/// Devuelve `true` si:
-/// - El directorio contiene más de `max_files` archivos, **o**
-/// - Contiene al menos un archivo con una extensión de la lista `extensions`.
-pub fn should_create_impresos(
+/// Returns `true` if:
+/// - The directory contains more than `max_files` files, **or**
+/// - It contains at least one file with an extension from the `extensions`
+///   list.
+pub fn should_create_printed(
     dir: &Path,
     max_files: usize,
     extensions: &[&str],
-) -> Result<bool, ImpresosError> {
+) -> Result<bool, DaifoError> {
     if !dir.is_dir() {
         return Ok(false);
     }
@@ -75,81 +82,79 @@ pub fn should_create_impresos(
     Ok(false)
 }
 
-/// Genera la ruta de directorio anidado a partir del template y la fecha.
+/// Generates the nested directory path from the template and the date.
 pub fn generate_date_path(
     settings: &Settings,
     date: chrono::NaiveDate,
-) -> Result<PathBuf, ImpresosError> {
-    let relative = expand_template(&settings.create_path, date, &settings.month_names);
+) -> Result<PathBuf, DaifoError> {
+    let relative =
+        expand_template(&settings.create_path, date, &settings.month_names);
     let root = PathBuf::from(&settings.root_directory);
     Ok(root.join(relative))
 }
 
-/// Crea recursivamente los directorios intermedios y devuelve la ruta completa
-/// al directorio "día" (hoja).
+/// Recursively creates intermediate directories and returns the full path
+/// to the "day" directory (leaf).
 pub fn ensure_date_directory(
     settings: &Settings,
     date: chrono::NaiveDate,
-) -> Result<PathBuf, ImpresosError> {
+) -> Result<PathBuf, DaifoError> {
     let full_path = generate_date_path(settings, date)?;
     std::fs::create_dir_all(&full_path)?;
     Ok(full_path)
 }
 
-/// Ejecuta la lógica completa para una fecha dada:
-/// 1. Crea (o asegura) la estructura de directorios según el template.
-/// 2. Crea el acceso directo (.lnk) en el directorio raíz si la configuración
-///    lo habilita.
-/// 3. Verifica si se debe crear la carpeta de impresos.
-/// 4. Si corresponde, la crea.
+/// Runs the full logic for a given date:
+/// 1. Creates (or ensures) the directory structure according to the template.
+/// 2. Creates the shortcut (.lnk) in the root directory if the configuration
+///    enables it.
+/// 3. Checks whether the prints folder should be created.
+/// 4. If applicable, creates it.
 ///
-/// Retorna `Some(path)` con la ruta a la carpeta de impresos si fue creada,
-/// o `None` si no se cumplieron las condiciones.
+/// Returns `Some(path)` with the path to the prints folder if it was created,
+/// or `None` if the conditions were not met.
 pub fn run_for_date(
     settings: &Settings,
     date: chrono::NaiveDate,
-) -> Result<Option<PathBuf>, ImpresosError> {
+) -> Result<Option<PathBuf>, DaifoError> {
     let day_dir = ensure_date_directory(settings, date)?;
 
-    // Crear acceso directo al directorio del día (si está configurado)
+    // Create shortcut to the day directory (if configured)
     if settings.create_link_to_daily_folder {
         if let Err(e) = ensure_link_for_date(settings, date, &day_dir) {
-            // No queremos que un fallo al crear el .lnk detenga todo el
-            // proceso.  Lo registramos y continuamos.
+            // We don't want a .lnk creation failure to stop the entire
+            // process. We log it and continue.
             tracing::warn!(
                 error = %e,
                 date = %date.format("%Y-%m-%d"),
-                "No se pudo crear el acceso directo al directorio del día"
+                "Failed to create shortcut to the day directory"
             );
         }
     }
 
-    let trigger_extensions: Vec<&str> = settings
-        .extension_trigger_impresos
-        .iter()
-        .map(|s| s.as_str())
-        .collect();
-    if should_create_impresos(
+    let trigger_extensions: Vec<&str> =
+        settings.extension_trigger_printed.iter().map(|s| s.as_str()).collect();
+    if should_create_printed(
         &day_dir,
         settings.max_files_before_trigger.into(),
         &trigger_extensions,
     )? {
-        let impresos_dir = day_dir.join(&settings.impresos_folder_name);
-        std::fs::create_dir_all(&impresos_dir)?;
-        Ok(Some(impresos_dir))
+        let printed_dir = day_dir.join(&settings.printed_folder_name);
+        std::fs::create_dir_all(&printed_dir)?;
+        Ok(Some(printed_dir))
     } else {
         Ok(None)
     }
 }
 
-/// Itera sobre un rango de fechas y ejecuta [`run_for_date`] para cada día.
+/// Iterates over a date range and runs [`run_for_date`] for each day.
 ///
-/// Útil para procesar múltiples fechas (ej. un mes entero).
+/// Useful for processing multiple dates (e.g. an entire month).
 pub fn run_for_date_range(
     settings: &Settings,
     start: chrono::NaiveDate,
     end: chrono::NaiveDate,
-) -> Result<Vec<Option<PathBuf>>, ImpresosError> {
+) -> Result<Vec<Option<PathBuf>>, DaifoError> {
     let mut results = Vec::new();
     let mut current = start;
     while current <= end {
@@ -165,36 +170,37 @@ mod tests {
     use crate::daily_folder::settings::Settings;
 
     #[test]
-    fn test_should_create_impresos_by_count() {
-        let dir = std::env::temp_dir().join("test_impresos_count");
+    fn test_should_create_printed_by_count() {
+        let dir = std::env::temp_dir().join("test_printed_count");
         std::fs::create_dir_all(&dir).unwrap();
         for i in 0..60 {
-            std::fs::write(dir.join(format!("file_{}.txt", i)), "test").unwrap();
+            std::fs::write(dir.join(format!("file_{}.txt", i)), "test")
+                .unwrap();
         }
-        let result = should_create_impresos(&dir, 50, &[]).unwrap();
-        assert!(result, "Debería dispararse por cantidad de archivos");
+        let result = should_create_printed(&dir, 50, &[]).unwrap();
+        assert!(result, "Should trigger by file count");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn test_should_create_impresos_by_extension() {
-        let dir = std::env::temp_dir().join("test_impresos_ext");
+    fn test_should_create_printed_by_extension() {
+        let dir = std::env::temp_dir().join("test_printed_ext");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("documento.pdf"), "test").unwrap();
         let extensions = vec!["pdf", "png"];
-        let result = should_create_impresos(&dir, 100, &extensions).unwrap();
-        assert!(result, "Debería dispararse por extensión .pdf");
+        let result = should_create_printed(&dir, 100, &extensions).unwrap();
+        assert!(result, "Should trigger by .pdf extension");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
-    fn test_should_not_create_impresos() {
-        let dir = std::env::temp_dir().join("test_impresos_none");
+    fn test_should_not_create_printed() {
+        let dir = std::env::temp_dir().join("test_printed_none");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("documento.txt"), "test").unwrap();
         let extensions = vec!["pdf"];
-        let result = should_create_impresos(&dir, 100, &extensions).unwrap();
-        assert!(!result, "No debería dispararse");
+        let result = should_create_printed(&dir, 100, &extensions).unwrap();
+        assert!(!result, "Should not trigger");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

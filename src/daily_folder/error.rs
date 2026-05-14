@@ -1,34 +1,31 @@
-//! Tipos de error estáticamente conocidos para la lógica de dominio.
+//! Statically known error types for the domain logic.
 
 use thiserror::Error;
 
-/// Errores estáticamente conocidos para la lógica de dominio de impresos.
+/// Statically known errors for the prints domain logic.
 #[derive(Error, Debug)]
-pub enum ImpresosError {
-    /// Fallo al leer o escribir en el sistema de archivos.
-    #[error("error de entrada/salida: {0}")]
+pub enum DaifoError {
+    /// File system read/write failure.
+    #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
 
-    /// El archivo de configuración TOML no se pudo parsear.
-    #[error("error al parsear el archivo de configuración: {0}")]
+    /// Failed to parse the TOML configuration file.
+    #[error("error parsing configuration file: {0}")]
     SettingsParse(String),
 
-    /// El template de ruta contiene marcadores no soportados.
-    #[error("template de ruta inválido: {0}")]
+    /// The path template contains unsupported markers.
+    #[error("invalid path template: {0}")]
     InvalidTemplate(String),
 
-    /// Falta un nombre de mes en la tabla de configuración.
-    #[error(
-        "falta el nombre del mes para la clave '{0}' — agregalo en \
-         [month_names]"
-    )]
+    /// Missing month name in the configuration table.
+    #[error("missing month name for key '{0}' — add it in [month_names]")]
     MissingMonthName(String),
 
-    /// No se pudo crear el directorio base.
-    #[error("no se pudo crear el directorio: {0}")]
+    /// Failed to create the base directory.
+    #[error("failed to create directory: {0}")]
     DirectoryCreationFailed(String),
 
-    /// Fallo al crear el acceso directo (.lnk).
-    #[error("no se pudo crear el acceso directo: {0}")]
-    LinkCreationFailed(String),
+    /// Failed to create the shortcut (.lnk).
+    #[error("failed to create shortcut: {0}")]
+    SymlinkCreationFailed(String),
 }

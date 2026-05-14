@@ -1,40 +1,40 @@
-//! Punto de entrada del binario `impresos`.
+//! Entry point for the `daifo` binary.
 //!
-//! La logica de aplicacion esta en [`utils::impresos::app`].
-//! Aqui solo se instala `color_eyre`, se construye el runtime mono-hilo de
-//! `tokio`, se lanza el icono de bandeja y se invoca `app::run()`.
+//! Application logic is in [`utils::daily_folder::app`].
+//! Here we only install `color_eyre`, build the single-threaded
+//! `tokio` runtime, launch the tray icon and call `app::run()`.
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use color_eyre::eyre::{self, Context};
-use utils::{impresos::app::init_logging, tray::EXIT_REQUESTED};
+use daily_folder::{daily_folder::app::init_logging, tray::EXIT_REQUESTED};
 
 fn main() -> eyre::Result<()> {
-    // ── Instalar color_eyre ─────────────────────────────────────────────
+    // ── Install color_eyre ──────────────────────────────────────────────
     color_eyre::install()?;
     // ── Logging ─────────────────────────────────────────────────────────
     init_logging()?;
     let _ = dotenvy::dotenv();
 
-    // ── Icono de bandeja (Windows) / no-op (otros SO) ───────────────────
-    utils::tray::start_tray();
+    // ── Tray icon (Windows) / no-op (other OS) ──────────────────────────
+    daily_folder::tray::start_tray();
 
-    // ── Construir runtime tokio mono-hilo ───────────────────────────────
+    // ── Build single-threaded tokio runtime ──────────────────────────────
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
-        .wrap_err("No se pudo construir el runtime de tokio")?;
+        .wrap_err("Failed to build tokio runtime")?;
 
     rt.block_on(async {
         tokio::select! {
             _ = tray_exit_requested() => {
-                tracing::info!("notificacion de salida recibida desde el hilo de bandeja.");
+                tracing::info!("exit notification received from tray thread.");
             },
-             res = utils::impresos::app::run() => {
-                res.wrap_err("Error en la aplicacion")?;
+             res = daily_folder::daily_folder::app::run() => {
+                res.wrap_err("Application error")?;
              }
         }
 
-        // Esperar a que el hilo de bandeja termine antes de salir
+        // Wait for the tray thread to finish before exiting
         tracing::info!("goodbye!...\n");
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         Ok(())

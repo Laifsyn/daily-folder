@@ -1,8 +1,8 @@
-//! Creación de accesos directos (.lnk de Windows) al directorio del día
-//! y registro de los mismos en una base de datos local (JSON).
+//! Creation of shortcuts (Windows .lnk) to the day directory
+//! and registration of them in a local database (JSON).
 //!
-//! Los accesos directos se crean en el directorio raíz con un nombre
-//! "aplanado" derivado del template de ruta.
+//! Shortcuts are created in the root directory with a
+//! "flattened" name derived from the path template.
 
 use std::{
     collections::HashMap,
@@ -14,46 +14,46 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::{error::ImpresosError, template::expand_template};
+use super::{error::DaifoError, template::expand_template};
 
 // ---------------------------------------------------------------------------
-// Constantes
+// Constants
 // ---------------------------------------------------------------------------
 
-/// Carácter usado para reemplazar los separadores de ruta (`/`, `\`) al
-/// aplanar el nombre del acceso directo.
+/// Character used to replace path separators (`/`, `\`) when
+/// flattening the shortcut name.
 pub const LINK_NAME_SEPARATOR: char = '-';
 
-/// Extensión que se añade al nombre aplanado.
+/// Extension added to the flattened name.
 const LINK_EXTENSION: &str = ".lnk";
 
-/// Ruta por defecto del archivo que guarda el registro de enlaces creados.
-const LINKS_DB_PATH: &str = "./.settings/impresos_links.json";
+/// Default path for the file that stores the created links record.
+const LINKS_DB_PATH: &str = "./.settings/printed_symlinks.json";
 
 // ---------------------------------------------------------------------------
-// Base de datos de enlaces (JSON)
+// Links database (JSON)
 // ---------------------------------------------------------------------------
 
-/// Una entrada en el registro de accesos directos creados.
+/// An entry in the created shortcuts record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkEntry {
-    /// Ruta del archivo `.lnk`.
+    /// Path of the `.lnk` file.
     pub link_path: String,
-    /// Ruta del directorio al que apunta el acceso directo.
+    /// Path of the directory the shortcut points to.
     pub target_path: String,
-    /// Fecha para la que se creó (ISO: `YYYY-MM-DD`).
+    /// Date it was created for (ISO: `YYYY-MM-DD`).
     pub created_date: String,
 }
 
-/// Base de datos ligera en JSON que registra los accesos directos creados.
+/// Lightweight JSON database that records the created shortcuts.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinksDatabase {
     pub links: Vec<LinkEntry>,
 }
 
 impl LinksDatabase {
-    /// Carga la base de datos desde disco, o devuelve una vacía si el
-    /// archivo no existe o está corrupto.
+    /// Loads the database from disk, or returns an empty one if the
+    /// file does not exist or is corrupt.
     pub fn load() -> Self {
         let path = Path::new(LINKS_DB_PATH);
         if path.exists() {
@@ -68,16 +68,16 @@ impl LinksDatabase {
         }
     }
 
-    /// Persiste la base de datos a disco.
-    pub fn save(&self) -> Result<(), ImpresosError> {
+    /// Persists the database to disk.
+    pub fn save(&self) -> Result<(), DaifoError> {
         let path = Path::new(LINKS_DB_PATH);
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
         let json = serde_json::to_string_pretty(self).map_err(|e| {
-            ImpresosError::Io(std::io::Error::new(
+            DaifoError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
-                format!("error al serializar la base de datos de enlaces: {e}"),
+                format!("error serializing links database: {e}"),
             ))
         })?;
         let mut file = std::fs::File::create(path)?;
@@ -85,14 +85,14 @@ impl LinksDatabase {
         Ok(())
     }
 
-    /// Registra un nuevo enlace.
+    /// Registers a new link.
     pub fn insert(&mut self, entry: LinkEntry) { self.links.push(entry); }
 
-    /// Elimina las entradas cuyo directorio destino ya no existe, o cuya
-    /// fecha es anterior a hoy.  También elimina el archivo `.lnk`
-    /// correspondiente si todavía está presente.
+    /// Removes entries whose target directory no longer exists, or whose
+    /// date is before today. Also deletes the corresponding `.lnk`
+    /// file if it is still present.
     ///
-    /// Retorna el número de entradas eliminadas.
+    /// Returns the number of removed entries.
     pub fn cleanup_stale(&mut self, today: chrono::NaiveDate) -> usize {
         let mut removed = 0;
         let mut surviving = Vec::new();
@@ -100,10 +100,10 @@ impl LinksDatabase {
         for entry in self.links.drain(..) {
             let target = Path::new(&entry.target_path);
 
-            // Condición 1: el directorio destino ya no existe
+            // Condition 1: the target directory no longer exists
             let target_gone = !target.exists();
 
-            // Condición 2: la entrada es de una fecha anterior a hoy
+            // Condition 2: the entry is from a date before today
             let is_old = chrono::NaiveDate::parse_from_str(
                 &entry.created_date,
                 "%Y-%m-%d",
@@ -128,23 +128,23 @@ impl LinksDatabase {
 }
 
 // ---------------------------------------------------------------------------
-// Aplanado del nombre
+// Name flattening
 // ---------------------------------------------------------------------------
 
-/// Convierte una ruta con separadores en un nombre "aplanado" reemplazando
-/// cada separador (`/` o `\`) por [`LINK_NAME_SEPARATOR`].
+/// Converts a path with separators into a "flattened" name by replacing
+/// each separator (`/` or `\`) with [`LINK_NAME_SEPARATOR`].
 ///
-/// Los separadores consecutivos se contraen en un único carácter de
-/// reemplazo.  Al resultado se le añade la extensión `.lnk`.
+/// Consecutive separators are collapsed into a single replacement
+/// character. The `.lnk` extension is appended to the result.
 ///
-/// # Ejemplo
+/// # Example
 ///
 /// ```ignore
 /// let name = flatten_link_name("./2025/01 enero/15");
 /// assert_eq!(name, "2025-01 enero-15.lnk");
 /// ```
 pub fn flatten_link_name(raw: &str) -> String {
-    // Quitar prefijo "./" o ".\" antes de procesar
+    // Remove "./" or ".\" prefix before processing
     let raw = raw
         .strip_prefix("./")
         .or_else(|| raw.strip_prefix(".\\"))
@@ -170,7 +170,7 @@ pub fn flatten_link_name(raw: &str) -> String {
         }
     }
 
-    // Quitar un posible separador inicial (ej: "-2025..." → "2025...")
+    // Remove a possible leading separator (e.g. "-2025..." → "2025...")
     let trimmed = result
         .strip_prefix(&format!("{LINK_NAME_SEPARATOR}"))
         .unwrap_or(&result);
@@ -178,8 +178,8 @@ pub fn flatten_link_name(raw: &str) -> String {
     format!("{trimmed}{LINK_EXTENSION}")
 }
 
-/// Genera el nombre aplanado del acceso directo a partir del template de
-/// ruta y la fecha.
+/// Generates the flattened name of the shortcut from the path template
+/// and the date.
 pub fn make_link_name(
     template: &str,
     date: chrono::NaiveDate,
@@ -190,17 +190,17 @@ pub fn make_link_name(
 }
 
 // ---------------------------------------------------------------------------
-// Creación del acceso directo (.lnk) vía PowerShell (sin admin)
+// Shortcut creation (.lnk) via PowerShell (without admin)
 // ---------------------------------------------------------------------------
 
-/// Crea un acceso directo de Windows (`.lnk`) que apunta a `target`.
+/// Creates a Windows shortcut (`.lnk`) that points to `target`.
 ///
-/// Usa PowerShell con `WScript.Shell` para crear el archivo `.lnk` **sin**
-/// requerir permisos de administrador.
+/// Uses PowerShell with `WScript.Shell` to create the `.lnk` file
+/// **without** requiring administrator permissions.
 pub fn create_shell_link(
     target: &Path,
     link_path: &Path,
-) -> Result<(), ImpresosError> {
+) -> Result<(), DaifoError> {
     let target_abs =
         std::path::absolute(target).unwrap_or_else(|_| target.to_path_buf());
     let link_abs = if link_path.is_absolute() {
@@ -224,34 +224,35 @@ $Shortcut.Save()
         .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
         .creation_flags(0x08000000) // CREATE_NO_WINDOW
         .output()
-        .map_err(|e| ImpresosError::Io(e))?;
+        .map_err(|e| DaifoError::Io(e))?;
 
     if output.status.success() {
         Ok(())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(ImpresosError::LinkCreationFailed(stderr.trim().to_string()))
+        Err(DaifoError::SymlinkCreationFailed(stderr.trim().to_string()))
     }
 }
 
 // ---------------------------------------------------------------------------
-// Orquestación
+// Orchestration
 // ---------------------------------------------------------------------------
 
-/// Crea el acceso directo al directorio del día (si la configuración lo
-/// permite) y lo registra en la base de datos.
+/// Creates the shortcut to the day directory (if the configuration allows
+/// it) and registers it in the database.
 ///
-/// También copia el `.lnk` a cada ruta listada en
-/// `duplicate_daily_folder_link_to` (por ejemplo, el Escritorio).
-/// Si un directorio destino no existe, se omite sin error.
+/// Also copies the `.lnk` to each path listed in
+/// `duplicate_daily_folder_link_to` (for example, the Desktop).
+/// If a target directory does not exist, it is silently skipped.
 ///
-/// Retorna `Some(link_path)` con la ruta del enlace primario si se creó,
-/// o `None` si la configuración lo deshabilita o el enlace ya existía.
+/// Returns `Some(link_path)` with the path of the primary link if it was
+/// created, or `None` if the configuration disables it or the link already
+/// existed.
 pub fn ensure_link_for_date(
     settings: &super::settings::Settings,
     date: chrono::NaiveDate,
     day_dir: &Path,
-) -> Result<Option<PathBuf>, ImpresosError> {
+) -> Result<Option<PathBuf>, DaifoError> {
     if !settings.create_link_to_daily_folder {
         return Ok(None);
     }
@@ -266,7 +267,7 @@ pub fn ensure_link_for_date(
     let mut db = LinksDatabase::load();
     let mut any_created = false;
 
-    // ── Enlace primario (en el directorio raíz) ────────────────────────
+    // ── Primary link (in the root directory) ──────────────────────────
     if !link_path.exists() {
         create_shell_link(day_dir, &link_path)?;
         any_created = true;
@@ -279,7 +280,7 @@ pub fn ensure_link_for_date(
         });
     }
 
-    // ── Duplicados en rutas adicionales ─────────────────────────────────
+    // ── Duplicates in additional paths ───────────────────────────────────
     for dup_root in &settings.duplicate_daily_folder_link_to {
         let dup_dir = Path::new(dup_root);
         if !dup_dir.is_dir() {
@@ -307,7 +308,7 @@ pub fn ensure_link_for_date(
                 error = %e,
                 src = %link_path.display(),
                 dst = %dup_path.display(),
-                "No se pudo copiar el acceso directo a la ruta duplicada"
+                "Failed to copy shortcut to duplicate path"
             );
             continue;
         }
@@ -327,11 +328,10 @@ pub fn ensure_link_for_date(
     Ok(Some(link_path))
 }
 
-/// Ejecuta la limpieza de entradas obsoletas en la base de datos de
-/// enlaces.
+/// Runs cleanup of stale entries in the links database.
 pub fn cleanup_stale_links(
     today: chrono::NaiveDate,
-) -> Result<usize, ImpresosError> {
+) -> Result<usize, DaifoError> {
     let mut db = LinksDatabase::load();
     let removed = db.cleanup_stale(today);
     if removed > 0 {

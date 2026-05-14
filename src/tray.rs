@@ -1,12 +1,9 @@
-//! Icono en el area de notificacion (bandeja del sistema) para Windows.
+//! Notification area icon (system tray) for Windows.
 //!
-//! Usa el crate [`tray-icon`] para gestionar el icono y el menu contextual.
-//! Se requiere un hilo con bucle de mensajes de Windows.
+//! Uses the [`tray-icon`] crate to manage the icon and context menu.
+//! A thread with a Windows message loop is required.
 
-use std::{
-    sync::atomic::{AtomicBool, Ordering},
-    thread,
-};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tokio::sync::Notify;
 use tray_icon::{
@@ -21,75 +18,62 @@ use windows::Win32::{
     },
 };
 
-// ---------------------------------------------------------------------------
-// Constantes
-// ---------------------------------------------------------------------------
-
 const ID_SHOW_HIDE: &str = "show_hide";
 const ID_EXIT: &str = "exit";
 
-// ---------------------------------------------------------------------------
-// Señal global de salida
-// ---------------------------------------------------------------------------
-
+/// A global notification that the tray thread can use to signal that an exit
+/// has been requested.
 pub static EXIT_REQUESTED: Notify = Notify::const_new();
 
-// ---------------------------------------------------------------------------
-// Punto de entrada
-// ---------------------------------------------------------------------------
-
-/// Inicia el icono de bandeja del sistema.
+/// Starts the system tray icon.
 pub fn start_tray() {
     #[cfg(not(windows))]
     {
         return;
     }
 
-    // No compilar el icono de bandeja en Windows 7 — El programa es ejecutado
-    // por el OS(?) cuando se interactua con el tray icon.
+    // Do not compile the tray icon on Windows 7 — The program is executed
+    // by the OS(?) when interacting with the tray icon.
     //
-    // El crate tray-icon usa APIs modernas (p.ej. Shell_NotifyIconGetRect) que
-    // no existen.
+    // FIXME: factcheck the below statement:
+    //
+    // The tray-icon crate uses modern APIs (e.g. Shell_NotifyIconGetRect) that
+    // don't exist on Windows 7.
     #[cfg(all(windows, not(target_vendor = "win7")))]
     {
-        thread::Builder::new()
+        std::thread::Builder::new()
             .name("tray-icon".into())
             .spawn(|| {
                 if let Err(e) = tray_thread() {
-                    tracing::error!(error = %e, "El hilo de bandeja termino con error.");
+                    tracing::error!(error = %e, "The tray thread terminated with an error.");
                 }
             })
-            .expect("No se pudo lanzar el hilo de bandeja");
+            .expect("Failed to spawn the tray thread");
     }
 
     #[cfg(all(windows, target_vendor = "win7"))]
     {
-        tracing::info!("Windows 7 detectado — icono de bandeja desactivado");
+        tracing::info!("Windows 7 detected — tray icon disabled");
     }
 }
 
-// ---------------------------------------------------------------------------
-// Hilo principal
-// ---------------------------------------------------------------------------
-
 #[cfg(windows)]
 fn tray_thread() -> Result<(), String> {
-    // La consola puede no existir si el binario tiene
+    // The console may not exist if the binary has
     // #[windows_subsystem = "windows"]
     let console_hwnd = unsafe { GetConsoleWindow() };
     let has_console = !console_hwnd.is_invalid();
 
     let icon = make_icon();
 
-    // Construir el menú — solo incluir "Mostrar/Ocultar consola" si hay consola
+    // Build the menu — only include "Show/Hide console" if there is a console
     let show_hide_item = if has_console {
-        let item =
-            MenuItem::with_id(ID_SHOW_HIDE, "Mostrar consola", true, None);
+        let item = MenuItem::with_id(ID_SHOW_HIDE, "Show console", true, None);
         Some(item)
     } else {
         None
     };
-    let exit_item = MenuItem::with_id(ID_EXIT, "Salir", true, None);
+    let exit_item = MenuItem::with_id(ID_EXIT, "Exit", true, None);
 
     let menu = Menu::new();
     if let Some(ref item) = show_hide_item {
@@ -104,7 +88,7 @@ fn tray_thread() -> Result<(), String> {
         .build()
         .map_err(|e| format!("TrayIconBuilder: {e:?}"))?;
 
-    // Ocultar la consola al iniciar (solo si existe)
+    // Hide the console at startup (only if it exists)
     if has_console {
         unsafe {
             let _ = ShowWindow(console_hwnd, SW_HIDE);
@@ -125,7 +109,7 @@ fn tray_thread() -> Result<(), String> {
                         }
                         visible.store(false, Ordering::Relaxed);
                         if let Some(ref item) = show_hide_item {
-                            item.set_text("Mostrar consola");
+                            item.set_text("Show console");
                         }
                     } else {
                         unsafe {
@@ -136,14 +120,12 @@ fn tray_thread() -> Result<(), String> {
                         }
                         visible.store(true, Ordering::Relaxed);
                         if let Some(ref item) = show_hide_item {
-                            item.set_text("Ocultar consola");
+                            item.set_text("Hide console");
                         }
                     }
                 }
                 ID_EXIT => {
-                    tracing::debug!(
-                        "Notificando salida solicitada por el menu de bandeja"
-                    );
+                    tracing::debug!("exit requested from tray menu");
                     EXIT_REQUESTED.notify_waiters();
                     break;
                 }
@@ -161,7 +143,7 @@ fn tray_thread() -> Result<(), String> {
 }
 
 // ---------------------------------------------------------------------------
-// Icono
+// Icon
 // ---------------------------------------------------------------------------
 
 fn make_icon() -> Icon {
@@ -181,5 +163,5 @@ fn make_icon() -> Icon {
         }
     }
 
-    Icon::from_rgba(rgba, width, height).expect("icono")
+    Icon::from_rgba(rgba, width, height).expect("icon")
 }

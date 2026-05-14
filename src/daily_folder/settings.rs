@@ -1,11 +1,11 @@
-//! Configuración: struct [`Settings`], valores por defecto, y
-//! carga/creación del archivo TOML con comentarios.
+//! Configuration: [`Settings`] struct, default values, and
+//! loading/creation of the TOML file with comments.
 
 use std::{collections::HashMap, path::Path};
 
 use serde::{Deserialize, Serialize};
 
-use super::error::ImpresosError;
+use super::error::DaifoError;
 
 fn default_root_directory() -> String { "./".to_string() }
 
@@ -17,8 +17,8 @@ fn default_extensions() -> Vec<String> {
 
 const fn default_max_files() -> u8 { 5 }
 
-/// Done's folder name, inside the daily folder.
-fn default_done_folder() -> String { "impreso".to_string() }
+/// Prints folder name, inside the daily folder.
+fn default_done_folder() -> String { "printed".to_string() }
 
 const fn default_create_link() -> bool { true }
 
@@ -44,50 +44,50 @@ pub fn default_month_names() -> HashMap<String, String> {
 /// App's settings
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Settings {
-    /// Directorio raíz donde se crea la estructura de fechas.
-    /// Por defecto: `"./"`.
+    /// Root directory where the date structure is created.
+    /// Default: `"./"`.
     #[serde(default = "default_root_directory")]
     pub root_directory: String,
 
-    /// Template de ruta usando los especificadores de formato de Chrono.
-    /// Los más comunes:
-    /// - `%Y` → año con 4 dígitos (ej. `2025`)
-    /// - `%m` → mes con 2 dígitos (ej. `01`)
-    /// - `%d` → día con 2 dígitos (ej. `15`)
-    /// - `%B` → nombre completo del mes, tomado de [`month_names`]
+    /// Path template using Chrono format specifiers.
+    /// Most common:
+    /// - `%Y` → 4-digit year (e.g. `2025`)
+    /// - `%m` → 2-digit month (e.g. `01`)
+    /// - `%d` → 2-digit day (e.g. `15`)
+    /// - `%B` → full month name, taken from [`month_names`]
     ///
-    /// Ver: <https://docs.rs/chrono/latest/chrono/format/strftime/index.html>
+    /// See: <https://docs.rs/chrono/latest/chrono/format/strftime/index.html>
     #[serde(default = "default_create_path")]
     pub create_path: String,
 
-    /// Extensiones que disparan la creación de la carpeta de impresos.
+    /// Extensions that trigger the creation of the prints folder.
     #[serde(default = "default_extensions")]
-    pub extension_trigger_impresos: Vec<String>,
+    pub extension_trigger_printed: Vec<String>,
 
-    /// Número máximo de archivos en un directorio "día" antes de crear la
-    /// carpeta de impresos automáticamente.
+    /// Maximum number of files in a "day" directory before automatically
+    /// creating the prints folder.
     #[serde(default = "default_max_files")]
     pub max_files_before_trigger: u8,
 
-    /// Nombre de la carpeta de impresos a crear dentro del directorio día.
+    /// Name of the prints folder to create inside the day directory.
     #[serde(default = "default_done_folder")]
-    pub impresos_folder_name: String,
+    pub printed_folder_name: String,
 
-    /// Si es `true`, crea un acceso directo (.lnk) al directorio del día
-    /// en el directorio raíz.  El nombre del acceso directo es una versión
-    /// "aplanada" del template donde los separadores de ruta se
-    /// reemplazan por puntos.
+    /// If `true`, creates a shortcut (.lnk) to the day directory
+    /// in the root directory.  The shortcut name is a "flattened" version
+    /// of the template where path separators are
+    /// replaced by dots.
     #[serde(default = "default_create_link")]
     pub create_link_to_daily_folder: bool,
 
-    /// Directorios adicionales donde copiar el acceso directo creado.
-    /// Útil para duplicar el enlace al Escritorio u otras ubicaciones.
-    /// Si un directorio no existe, simplemente se omite.
+    /// Additional directories where to copy the created shortcut.
+    /// Useful for duplicating the link to the Desktop or other locations.
+    /// If a directory doesn't exist, it is simply skipped.
     #[serde(default = "default_duplicate_link_targets")]
     pub duplicate_daily_folder_link_to: Vec<String>,
 
-    /// Tabla opcional con nombres de meses. Si no se proporciona, se usa el
-    /// default en español (ver [`default_month_names`]).
+    /// Optional table with month names. If not provided, the Spanish
+    /// default is used (see [`default_month_names`]).
     #[serde(default = "default_month_names")]
     pub month_names: HashMap<String, String>,
 }
@@ -97,9 +97,9 @@ impl Default for Settings {
         Self {
             root_directory: default_root_directory(),
             create_path: default_create_path(),
-            extension_trigger_impresos: default_extensions(),
+            extension_trigger_printed: default_extensions(),
             max_files_before_trigger: default_max_files(),
-            impresos_folder_name: default_done_folder(),
+            printed_folder_name: default_done_folder(),
             create_link_to_daily_folder: default_create_link(),
             duplicate_daily_folder_link_to: default_duplicate_link_targets(),
             month_names: default_month_names(),
@@ -108,10 +108,10 @@ impl Default for Settings {
 }
 
 // ---------------------------------------------------------------------------
-// TOML I/O con comentarios (toml_edit)
+// TOML I/O with comments (toml_edit)
 // ---------------------------------------------------------------------------
 
-/// Construye el documento TOML por defecto con comentarios explicativos.
+/// Builds the default TOML document with explanatory comments.
 fn build_default_toml_document() -> toml_edit::DocumentMut {
     let mut doc = toml_edit::DocumentMut::new();
 
@@ -120,9 +120,9 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     doc.insert("root_directory", toml_edit::value(root_dir));
     if let Some(mut key) = doc.key_mut("root_directory") {
         key.leaf_decor_mut().set_prefix(
-            "# Directorio raíz donde se crea la estructura de fechas.\n# Por \
-             defecto es la ubicación de la aplicación.\n# Caso de uso real \
-             podría ser otra partición, ej. `D:\\`\n",
+            "# Root directory where the date structure is created.\n# Por \
+             default is the application's location.\n# A real use case could \
+             be another partition, e.g. `D:\\`\n",
         );
     }
 
@@ -131,24 +131,24 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     doc.insert("create_path", toml_edit::value(default_template));
     if let Some(mut key) = doc.key_mut("create_path") {
         key.leaf_decor_mut().set_prefix(
-            "# Template de ruta con especificadores de Chrono.\n# %Y = año 4 \
-             dígitos\n# %m = mes 2 dígitos\n# %d = día 2 dígitos\n# %B = \
-             nombre del mes (tomado de [month_names])\n",
+            "# Path template with Chrono specifiers.\n# %Y = 4-digit year\n# \
+             %m = mes 2 year\n# %d = día 2 year\n# %B = month name (taken \
+             from [month_names])\n",
         );
     }
 
-    // -- extension_trigger_impresos --
+    // -- extension_trigger_printed --
     let mut ext_array = toml_edit::Array::new();
     ext_array.extend(default_extensions().into_iter());
 
     doc.insert(
-        "extension_trigger_impresos",
+        "extension_trigger_printed",
         toml_edit::Item::Value(ext_array.into()),
     );
-    if let Some(mut key) = doc.key_mut("extension_trigger_impresos") {
+    if let Some(mut key) = doc.key_mut("extension_trigger_printed") {
         key.leaf_decor_mut().set_prefix(
-            "# Extensiones que disparan la creación de la carpeta de \
-             impresos\n# La lista puede crecer en el futuro.\n",
+            "# Extensions that trigger the creation of the daily folder's \
+             printed\n# The list may grow in the future.\n",
         );
     }
 
@@ -156,17 +156,16 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     doc.insert("max_files_before_trigger", (default_max_files() as i64).into());
     if let Some(mut key) = doc.key_mut("max_files_before_trigger") {
         key.leaf_decor_mut().set_prefix(
-            "# Número máximo de archivos en un directorio día antes de \
-             crear\n# automáticamente la carpeta de impresos.\n",
+            "# Maximum number of files in a day directory before crear\n# \
+             creating the prints folder.\n",
         );
     }
 
-    // -- impresos_folder_name --
-    doc.insert("impresos_folder_name", toml_edit::value("impresos"));
-    if let Some(mut key) = doc.key_mut("impresos_folder_name") {
+    // -- printed_folder_name --
+    doc.insert("printed_folder_name", toml_edit::value("printed"));
+    if let Some(mut key) = doc.key_mut("printed_folder_name") {
         key.leaf_decor_mut().set_prefix(
-            "# Nombre de la carpeta de impresos a crear dentro del directorio \
-             día.\n",
+            "# Name of the prints folder to create inside the day día.\n",
         );
     }
 
@@ -174,9 +173,8 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     doc.insert("create_link_to_daily_folder", toml_edit::value(true));
     if let Some(mut key) = doc.key_mut("create_link_to_daily_folder") {
         key.leaf_decor_mut().set_prefix(
-            "# Si es true, crea un acceso directo (.lnk) al directorio del \
-             día\n# en el directorio raíz.  No requiere permisos de \
-             administrador.\n",
+            "# If true, creates a shortcut (.lnk) to the day día\n# in the \
+             root directory.  No administrator permissions administrador.\n",
         );
     }
 
@@ -188,9 +186,9 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     );
     if let Some(mut key) = doc.key_mut("duplicate_daily_folder_link_to") {
         key.leaf_decor_mut().set_prefix(
-            "# Directorios adicionales donde copiar el acceso directo \
-             (.lnk).\n# Ejemplo: [\"C:\\Users\\anton\\Desktop\"]\n# Si un \
-             directorio no existe, se omite sin error.\n",
+            "# Additional directories where to copy the shortcut (.lnk).\n# \
+             Example: [\"C:\\Users\\anton\\Desktop\"]\n# Si un directorio no \
+             existe, se omite sin error.\n",
         );
     }
 
@@ -206,28 +204,26 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     doc.insert("month_names", toml_edit::Item::Table(month_table));
     if let Some(mut key) = doc.key_mut("month_names") {
         key.leaf_decor_mut().set_prefix(
-            "# Tabla de nombres de meses.\n# Opcional: si la localización del \
-             sistema funciona, se puede dejar vacía.\n# Por defecto se \
-             rellena con nombres en español para compatibilidad con Windows \
-             7.\n",
+            "# Table of month names.\n# Optional: if the system locale works, \
+             it can be left empty.\n# By default it is filled with Spanish \
+             names for Windows 7 compatibility 7.\n",
         );
     }
 
     doc
 }
 
-/// Carga la configuración desde un archivo TOML.
-/// Si el archivo no existe, lo crea con valores por defecto (incluyendo
+/// Loads the configuration from a TOML file.
+/// If the file doesn't exist, it creates it with default values (including
 /// comentarios).
-pub fn load_or_create_settings(path: &Path) -> Result<Settings, ImpresosError> {
+pub fn load_or_create_settings(path: &Path) -> Result<Settings, DaifoError> {
     if path.exists() {
-        let content =
-            std::fs::read_to_string(path).map_err(ImpresosError::Io)?;
+        let content = std::fs::read_to_string(path).map_err(DaifoError::Io)?;
         let settings: Settings = toml::from_str(&content)
-            .map_err(|e| ImpresosError::SettingsParse(e.to_string()))?;
+            .map_err(|e| DaifoError::SettingsParse(e.to_string()))?;
         Ok(settings)
     } else {
-        // Crear directorio padre si no existe
+        // Create parent directory if it doesn't exist
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -235,7 +231,7 @@ pub fn load_or_create_settings(path: &Path) -> Result<Settings, ImpresosError> {
         let doc = build_default_toml_document();
         std::fs::write(path, doc.to_string())?;
 
-        // Devolver los defaults
+        // Return the defaults
         Ok(Settings::default())
     }
 }
@@ -249,7 +245,7 @@ mod tests {
         let names = default_month_names();
         for i in 1..=12 {
             let key = format!("{:02}", i);
-            assert!(names.contains_key(&key), "Falta el mes {}", key);
+            assert!(names.contains_key(&key), "Missing month {}", key);
         }
     }
 }

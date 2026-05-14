@@ -1,99 +1,95 @@
-# Impresos
+# Prints
 
-Sistema de creación automática de carpetas para trabajos de impresión.
-Genera una estructura de directorios basada en la fecha y, bajo ciertas
-condiciones, crea una subcarpeta `impresos` dentro del directorio del día.
+Automated folder creation system for print jobs.
+Generates a date-based directory structure and, under certain
+conditions, creates an `printed` subfolder inside the day's directory.
 
-## Instalación
+## Installation
 
-El binario se compila como parte del workspace:
-
-```bash
-cargo build --release -p utils
-```
-
-El ejecutable se encontrará en `target/release/impresos.exe` (Windows) o
-`target/release/impresos` (Linux/macOS).
-
-## Uso rápido
+The binary is compiled as part of the workspace:
 
 ```bash
-# Modo continuo (daemon) — se queda corriendo indefinidamente
-./impresos
-
-# Modo continuo con intervalo personalizado (cada 60 segundos)
-./impresos --interval 60
-
-# Ejecutar una sola vez para hoy y salir (útil para cron / task scheduler)
-./impresos --once
-
-# Fecha específica (administrativo, una sola ejecución)
-./impresos --date 2025-03-07
-
-# Rango de fechas — backfill administrativo
-./impresos --start 2025-03-01 --end 2025-03-31
-
-# Especificar archivo de configuración
-./impresos --settings-file ./mi_config.toml
-
-# Sobrescribir el directorio raíz
-./impresos --root-directory D:\trabajos
+cargo build --release
 ```
 
-## Opciones CLI
+## Quick Start
 
-| Opción | Variable de entorno | Descripción |
-|---|---|---|
-| `--root-directory` | `IMPRESOS_ROOT_DIRECTORY` | Directorio raíz donde se crea la estructura de fechas. Sobrescribe lo definido en el `.toml`. |
-| `--settings-file` | `IMPRESOS_SETTINGS_FILE` | Ruta al archivo `.toml` de configuración. Por defecto: `./.settings/impresos.toml`. |
-| `--date` | `IMPRESOS_DATE` | **(Admin)** Fecha única a procesar (`YYYY-MM-DD`). El programa sale tras procesarla. |
-| `--start` | `IMPRESOS_START` | **(Admin)** Inicio de rango de backfill (`YYYY-MM-DD`). Usar con `--end`. |
-| `--end` | `IMPRESOS_END` | **(Admin)** Fin de rango de backfill (`YYYY-MM-DD`). Usar con `--start`. |
-| `--once` | `IMPRESOS_ONCE` | Procesa el día actual una vez y sale. Útil para cron / tareas programadas. |
-| `--interval` | `IMPRESOS_INTERVAL` | Segundos entre chequeos en modo continuo. Por defecto: `300` (5 min). |
+```bash
+# Continuous mode (daemon) — keeps running indefinitely
+./daifo
 
-## Modos de operación
+# Continuous mode with custom interval (every 60 seconds)
+./daifo --interval 60
 
-| Argumentos | Comportamiento |
-|---|---|
-| *(ninguno)* | **Modo continuo (daemon).** Procesa el día actual y repite cada `--interval` segundos indefinidamente. |
-| `--once` | Procesa el día actual una vez y sale. |
-| `--date` | Una sola ejecución para la fecha indicada, luego sale. |
-| `--start` + `--end` | Una sola ejecución para el rango de fechas (backfill administrativo), luego sale. |
+# Run once for today and exit (useful for cron / task scheduler)
+./daifo --once
 
-## Archivo de configuración
+# Specific date (administrative, single run)
+./daifo --date 2026-03-07
 
-Al ejecutar el programa por primera vez, se crea automáticamente
-`./.settings/impresos.toml` con valores por defecto y comentarios
-explicativos.
+# Date range — administrative backfill
+./daifo --start 2026-03-01 --end 2026-03-31
 
-### Campos
+# Specify configuration file
+./daifo --settings-file ./my_config.toml
+
+# Override the root directory
+./daifo --root-directory D:\jobs
+```
+
+## CLI Options
+
+| Option             | Environment Variable      | Description                                                                                   |
+| ------------------ | ------------------------- | --------------------------------------------------------------------------------------------- |
+| `--root-directory` | `PRINTED_ROOT_DIRECTORY` | Root directory where the date structure is created. Overrides what is defined in the `.toml`. |
+| `--settings-file`  | `PRINTED_SETTINGS_FILE`  | Path to the `.toml` configuration file. Default: `./.settings/daifo.toml`.                 |
+| `--date`           | `PRINTED_DATE`           | **(Admin)** Single date to process (`YYYY-MM-DD`). The program exits after processing it.     |
+| `--start`          | `PRINTED_START`          | **(Admin)** Start of backfill range (`YYYY-MM-DD`). Use with `--end`.                         |
+| `--end`            | `PRINTED_END`            | **(Admin)** End of backfill range (`YYYY-MM-DD`). Use with `--start`.                         |
+| `--once`           | `PRINTED_ONCE`           | Processes the current day once and exits. Useful for cron / scheduled tasks.                  |
+| `--interval`       | `PRINTED_INTERVAL`       | Seconds between checks in continuous mode. Default: `180` (3 min).                            |
+
+## Operation Modes
+
+| Arguments           | Behavior                                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------------------------ |
+| _(none)_            | **Continuous mode (daemon).** Processes the current day and repeats every `--interval` seconds indefinitely. |
+| `--once`            | Processes the current day once and exits.                                                                    |
+| `--date`            | Single run for the specified date, then exits.                                                               |
+| `--start` + `--end` | Single run for the date range (administrative backfill), then exits.                                         |
+
+## Configuration File
+
+When running the program for the first time, `./.settings/daifo.toml`
+is automatically created with default values and explanatory comments.
+
+### Fields
 
 ```toml
-# Directorio raíz. Puede ser relativo o absoluto (ej. "D:\")
+# Root directory. Can be relative or absolute (e.g. "D:\")
 root_directory = "./"
 
-# Template con especificadores de Chrono.
-# %Y = año 4 dígitos   %m = mes 2 dígitos
-# %d = día 2 dígitos   %B = nombre del mes (de la tabla [month_names])
+# Template with Chrono specifiers.
+# %Y = 4-digit year   %m = 2-digit month
+# %d = 2-digit day    %B = month name (from the [month_names] table)
 create_path = "%Y/%m %B/%d"
 
-# Extensiones que disparan la carpeta "impresos"
-extension_trigger_impresos = ["pdf", "png", "_tiff"]
+# Extensions that trigger the "printed" folder
+extension_trigger_printed = ["pdf", "png", "_tf"]
 
-# Si un día supera esta cantidad de archivos, se crea "impresos"
-max_files_before_trigger = 50
+# If a day exceeds this number of files, "printed" is created
+max_files_before_trigger = 5
 
-# Nombre de la subcarpeta que se crea
-impresos_folder_name = "impresos"
+# Name of the subfolder to create
+printed_folder_name = "printed"
 ```
 
-### Tabla de nombres de meses
+### Month Names Table
 
-Opcional. Si el sistema operativo maneja bien la localización, se puede dejar
-vacía. Por defecto se rellena con nombres en español para compatibilidad con
+Optional. If the operating system handles localization well, it can be left
+empty. By default it is populated with Spanish names for (hypothethical) compatibility with
 Windows 7.
-
+<!--I have no formal workflow to test if localization works properly in windows 7-->
 ```toml
 [month_names]
 "01" = "enero"
@@ -102,55 +98,57 @@ Windows 7.
 "12" = "diciembre"
 ```
 
-## Lógica de dominio
+## Domain Logic
 
-1. Dado un `root_directory` y una fecha, el programa genera una ruta como:
+1. Given a `root_directory` and a date, the program generates a path like:
+
    ```
    ./2025/03 marzo/15/
    ```
 
-2. Verifica si el directorio del día cumple **al menos una** de estas condiciones:
-   - Contiene más de `max_files_before_trigger` archivos.
-   - Contiene al menos un archivo con extensión listada en
-     `extension_trigger_impresos`.
+2. Checks whether the day's directory meets **at least one** of these conditions:
+   - Contains more than `max_files_before_trigger` files.
+   - Contains at least one file with an extension listed in
+     `extension_trigger_printed`.
 
-3. Si se cumple, crea la subcarpeta:
+3. If met, creates the subfolder:
+
    ```
-   ./2025/03 marzo/15/impresos/
+   ./2025/03 marzo/15/printed/
    ```
 
-4. En **modo continuo**, este chequeo se repite cada `--interval` segundos.
-   La operación es **idempotente**: si la carpeta `impresos` ya existe, no
-   se duplica ni se modifica.
+4. In **continuous mode**, this check repeats every `--interval` seconds.
+   The operation is **idempotent**: if the `printed` folder already exists,
+   it is neither duplicated nor modified.
 
 ## Logs
 
-Los logs se escriben a dos destinos simultáneamente:
+Logs are written to two destinations simultaneously:
 
-- **Consola** (`stderr`): filtrados por variable de entorno `RUST_LOG`
-  (por defecto: `impresos=info`).
-- **Archivo**: rolling diario en `./.logs/impresos/impresos.log.YYYY-MM-DD`.
+- **Console** (`stderr`): filtered by the `RUST_LOG` environment variable
+  (default: `daifo=info`).
+- **File**: daily rolling at `./.logs/daifo/daifo.YYYY-MM-DD.log`.
 
-Para subir la verbosidad a depuración:
+To increase verbosity to debug level:
 
 ```bash
-RUST_LOG=impresos=debug ./impresos
+RUST_LOG=daifo=debug ./daifo
 ```
 
-## Estructura del código
+## Code Structure
 
 ```
-src/impresos/
-├── mod.rs        — módulo raíz, re-exports
-├── error.rs      — ImpresosError (estático, thiserror)
-├── settings.rs   — Settings, defaults, carga/creación del .toml
+src/daifo/
+├── mod.rs        — root module, re-exports
+├── error.rs      — DaifoError (static, thiserror)
+├── settings.rs   — Settings, defaults, .toml loading/creation
 ├── template.rs   — expand_template (Chrono + month_names)
-├── ops.rs        — should_create_impresos, run_for_date, run_for_date_range
-├── app.rs        — CLI, logging, spawn_blocking, modo continuo (capa de aplicación)
-└── readme.md     — este archivo
+├── ops.rs        — should_create_printed, run_for_date, run_for_date_range
+├── app.rs        — CLI, logging, spawn_blocking, continuous mode (application layer)
+└── readme.md     — this file
 ```
 
-La separación sigue el principio de que la **capa de dominio** no conoce
-`tokio`, `color_eyre`, ni `tracing` — solo maneja errores estáticos. La
-**capa de aplicación** (`app.rs`) orquesta las llamadas bloqueantes sobre
-`spawn_blocking` y convierte los errores a `color_eyre::Report`.
+The separation follows the principle that the **domain layer** knows nothing
+about `tokio`, `color_eyre`, or `tracing` — it only handles static errors.
+The **application layer** (`app.rs`) orchestrates blocking calls over
+`spawn_blocking` and converts errors to `color_eyre::Report`.

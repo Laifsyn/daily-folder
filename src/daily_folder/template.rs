@@ -1,23 +1,22 @@
-//! Expansión de templates de ruta con especificadores de Chrono.
+//! Path template expansion with Chrono specifiers.
 
 use std::collections::HashMap;
 
 use chrono::Datelike;
 
-/// Expande un template de ruta usando los especificadores de formato de
-/// Chrono.
+/// Expands a path template using Chrono format specifiers.
 ///
-/// El especificador `%B` (nombre completo del mes) se resuelve primero
-/// contra la tabla `month_names`. Si la clave está presente, se sustituye
-/// antes de delegar el resto a [`chrono::NaiveDate::format`].
+/// The `%B` specifier (full month name) is resolved first against the
+/// `month_names` table. If the key is present, it is substituted before
+/// delegating the rest to [`chrono::NaiveDate::format`].
 ///
-/// Si **no** se encuentra en la tabla, `%B` se deja sin reemplazar y Chrono
-/// lo resuelve usando la localización del sistema operativo (inglés en
-/// Windows 7 sin configuración regional). Esto actúa como fallback para no
-/// romper la ejecución si la tabla está incompleta.
+/// If it is **not** found in the table, `%B` is left unreplaced and Chrono
+/// resolves it using the operating system locale (English on Windows 7
+/// without regional settings). This acts as a fallback to avoid breaking
+/// execution if the table is incomplete.
 ///
-/// El resto de especificadores (`%Y`, `%m`, `%d`, etc.) se delegan
-/// directamente a [`chrono::NaiveDate::format`].
+/// The remaining specifiers (`%Y`, `%m`, `%d`, etc.) are delegated directly
+/// to [`chrono::NaiveDate::format`].
 pub(super) fn expand_template(
     template: &str,
     date: chrono::NaiveDate,
@@ -29,14 +28,14 @@ pub(super) fn expand_template(
 
     let mut preprocessed = template.to_string();
 
-    // Si encontramos el nombre del mes en la tabla, lo usamos.
-    // Esto garantiza que el resultado sea consistente independientemente
-    // de la localización del sistema operativo.
+    // If we find the month name in the table, we use it.
+    // This ensures the result is consistent regardless of the operating
+    // system locale.
     if let Some(name) = month_name {
         preprocessed = preprocessed.replace("%B", name);
     }
 
-    // Chrono se encarga del resto de especificadores estándar.
+    // Chrono handles the remaining standard specifiers.
     let result = date.format(&preprocessed).to_string();
 
     result
