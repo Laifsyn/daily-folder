@@ -31,10 +31,6 @@ use super::{
     settings::{Settings, load_or_create_settings},
 };
 
-// ---------------------------------------------------------------------------
-// CLI
-// ---------------------------------------------------------------------------
-
 /// Creates the folder structure for prints and, when applicable, the
 /// "printed" subfolder.
 ///
@@ -45,7 +41,6 @@ use super::{
 #[command(name = "daifo", version, about)]
 pub struct Cli {
     /// Root directory where the date structure is created.
-    /// Overrides the configuration file value.
     #[arg(long, env = "PRINTED_ROOT_DIRECTORY")]
     pub root_directory: Option<PathBuf>,
 
@@ -56,10 +51,6 @@ pub struct Cli {
         env = "PRINTED_SETTINGS_FILE"
     )]
     pub settings_file: PathBuf,
-
-    /// -------------------------------------------------------------------
-    /// Administrative modes (single run)
-    /// -------------------------------------------------------------------
 
     /// Date to run for (ISO format: YYYY-MM-DD).
     /// When used, the program processes this date and exits.
@@ -76,10 +67,6 @@ pub struct Cli {
     #[arg(long, env = "PRINTED_END")]
     pub end: Option<String>,
 
-    /// -------------------------------------------------------------------
-    /// Continuous mode
-    /// -------------------------------------------------------------------
-
     /// Run once for the current day and exit.
     /// Useful for environments where another scheduler (cron, task scheduler)
     /// invokes the program periodically.
@@ -91,10 +78,6 @@ pub struct Cli {
     #[arg(long, default_value = "180", env = "PRINTED_INTERVAL")]
     pub interval: u64,
 }
-
-// ---------------------------------------------------------------------------
-// Logging initialization
-// ---------------------------------------------------------------------------
 
 /// Configures `tracing-subscriber` with two layers:
 /// 1. Console (stderr) with environment filter.
@@ -152,10 +135,6 @@ pub fn init_logging() -> eyre::Result<()> {
     Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Application entry point
-// ---------------------------------------------------------------------------
-
 /// Runs the complete application.
 ///
 /// This function should be called from `main()` after installing
@@ -163,10 +142,9 @@ pub fn init_logging() -> eyre::Result<()> {
 pub async fn run() -> eyre::Result<()> {
     info!("Prints system started");
 
-    // ── CLI ─────────────────────────────────────────────────────────────
     let cli = Cli::parse();
 
-    // ── Configuration ───────────────────────────────────────────────────
+    // Configuration
     let settings_path = cli.settings_file.clone();
     info!(path = %settings_path.display(), "Loading configuration");
 
@@ -186,7 +164,7 @@ pub async fn run() -> eyre::Result<()> {
         );
     }
 
-    // ── Clean up stale links ──────────────────────────────────────
+    // Clean up stale links
     if settings.create_link_to_daily_folder {
         let _handle = tokio::task::spawn(async {
             let today = chrono::Local::now().date_naive();
@@ -209,27 +187,27 @@ pub async fn run() -> eyre::Result<()> {
         });
     }
 
-    // ── Determine mode and execute ────────────────────────────────────
+    // Determine mode and execute
     if let (Some(start_str), Some(end_str)) = (&cli.start, &cli.end) {
-        // ── Administrative mode: range ──────────────────────────────────
+        // mode: range
         let start = parse_date(start_str)?;
         let end = parse_date(end_str)?;
         info!(%start, %end, "Backfill mode: processing date range");
         run_range(&settings, start, end).await?;
         info!("Backfill completed");
     } else if let Some(date_str) = &cli.date {
-        // ── Administrative mode: single date ────────────────────────────
+        // mode: single date
         let date = parse_date(date_str)?;
         info!(%date, "Administrative mode: processing single date");
         run_single(&settings, date).await?;
         info!("Single date processing completed");
     } else if cli.once {
-        // ── One-shot mode for today ─────────────────────────────────────
+        // One-shot mode for today
         let today = chrono::Local::now().date_naive();
         run_single(&settings, today).await?;
         info!("Single run completed");
     } else {
-        // ── Continuous mode (daemon) ───────────────────────────────────
+        // Continuous mode (daemon)
         let interval = Duration::from_secs(cli.interval);
         info!(interval_secs = cli.interval, "mode: continuous.");
         run_continuous_loop(&settings, interval).await;
@@ -237,10 +215,6 @@ pub async fn run() -> eyre::Result<()> {
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Continuous mode
-// ---------------------------------------------------------------------------
 
 /// Main loop of continuous mode.
 ///
@@ -318,9 +292,6 @@ async fn run_continuous_loop(settings: &Settings, interval: Duration) {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Helpers for single date and range
-// ---------------------------------------------------------------------------
 /// Returns the created prints folder, or None if it didn't need to be created.
 async fn run_single(
     settings: &Settings,
@@ -376,10 +347,6 @@ async fn run_range(
 
     Ok(())
 }
-
-// ---------------------------------------------------------------------------
-// Utilities
-// ---------------------------------------------------------------------------
 
 /// Parses a date in ISO format `YYYY-MM-DD`.
 fn parse_date(s: &str) -> eyre::Result<chrono::NaiveDate> {

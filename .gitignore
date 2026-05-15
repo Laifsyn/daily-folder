@@ -20,3 +20,4 @@ target/
 Cargo.lock
 
 .gitignore
+.logs
