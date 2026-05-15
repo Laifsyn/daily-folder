@@ -3,15 +3,15 @@
 //! Application logic is in [`daifo::app`].
 //! Here we are only installing `color_eyre`, build the single-threaded, init
 //! logging `tokio` runtime, launch the tray icon and call `app::run()`.
-#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+// #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use color_eyre::eyre::{self, Context};
 use daifo::{init_logging, tray::EXIT_REQUESTED};
 
 fn main() -> eyre::Result<()> {
+    let _ = dotenvy::dotenv();
     color_eyre::install()?;
 
-    let _ = dotenvy::dotenv();
     init_logging()?;
 
     daifo::tray::start_tray();
@@ -28,7 +28,7 @@ fn main() -> eyre::Result<()> {
                 tracing::info!("exit notification received from tray thread.");
             },
              res = daifo::run() => {
-                res.wrap_err("Application error")?;
+                 tracing::error!(error = ?res.unwrap_err(), "app::run() returned an error.");
              }
         }
 

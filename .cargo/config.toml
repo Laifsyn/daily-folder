@@ -1,0 +1,8 @@
+# For compiling to windows 7:
+# rustup toolchain install nightly
+# cargo +nightly build -Z build-std --release --target i686-win7-windows-msvc
+[target.i686-win7-windows-msvc]
+rustflags = ["-Ctarget-feature=+crt-static"]
+
+[unstable]
+build-std = ["core", "std", "alloc", "proc_macro"]

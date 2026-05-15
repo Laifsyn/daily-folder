@@ -200,10 +200,9 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     for key in sorted_keys {
         month_table.insert(key, toml_edit::value(default_names[key].as_str()));
     }
-    month_table.set_implicit(true);
     doc.insert("month_names", toml_edit::Item::Table(month_table));
-    if let Some(mut key) = doc.key_mut("month_names") {
-        key.leaf_decor_mut().set_prefix(
+    if let Some(toml_edit::Item::Table(table)) = doc.get_mut("month_names") {
+        table.decor_mut().set_prefix(
             "# Table of month names.\n# Optional: if the system locale works, \
              it can be left empty.\n# By default it is filled with Spanish \
              names for Windows 7 compatibility 7.\n",
