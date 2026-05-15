@@ -167,7 +167,7 @@ pub fn run_for_date_range(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::daily_folder::settings::Settings;
+    use crate::daifo::settings::Settings;
 
     #[test]
     fn test_should_create_printed_by_count() {

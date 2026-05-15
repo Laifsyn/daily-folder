@@ -1,2 +1,2 @@
-pub mod daily_folder;
+pub mod daifo;
 pub mod tray;

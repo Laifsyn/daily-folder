@@ -48,7 +48,7 @@ mod tests {
     use chrono::NaiveDate;
 
     use super::*;
-    use crate::daily_folder::settings::default_month_names;
+    use crate::daifo::settings::default_month_names;
 
     #[test]
     fn test_expand_template_basic() {

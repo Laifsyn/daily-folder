@@ -1,12 +1,12 @@
 //! Entry point for the `daifo` binary.
 //!
-//! Application logic is in [`utils::daily_folder::app`].
-//! Here we only install `color_eyre`, build the single-threaded
-//! `tokio` runtime, launch the tray icon and call `app::run()`.
+//! Application logic is in [`daifo::app`].
+//! Here we are only installing `color_eyre`, build the single-threaded, init
+//! logging `tokio` runtime, launch the tray icon and call `app::run()`.
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use color_eyre::eyre::{self, Context};
-use daily_folder::{daily_folder::app::init_logging, tray::EXIT_REQUESTED};
+use daifo::{daifo::app::init_logging, tray::EXIT_REQUESTED};
 
 fn main() -> eyre::Result<()> {
     // ── Install color_eyre ──────────────────────────────────────────────
@@ -16,7 +16,7 @@ fn main() -> eyre::Result<()> {
     let _ = dotenvy::dotenv();
 
     // ── Tray icon (Windows) / no-op (other OS) ──────────────────────────
-    daily_folder::tray::start_tray();
+    daifo::tray::start_tray();
 
     // ── Build single-threaded tokio runtime ──────────────────────────────
     let rt = tokio::runtime::Builder::new_current_thread()
@@ -29,7 +29,7 @@ fn main() -> eyre::Result<()> {
             _ = tray_exit_requested() => {
                 tracing::info!("exit notification received from tray thread.");
             },
-             res = daily_folder::daily_folder::app::run() => {
+             res = daifo::app::run() => {
                 res.wrap_err("Application error")?;
              }
         }
