@@ -6,16 +6,14 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
 use color_eyre::eyre::{self, Context};
-use daifo::{daifo::app::init_logging, tray::EXIT_REQUESTED};
+use daifo::{init_logging, tray::EXIT_REQUESTED};
 
 fn main() -> eyre::Result<()> {
-    // ── Install color_eyre ──────────────────────────────────────────────
     color_eyre::install()?;
-    // ── Logging ─────────────────────────────────────────────────────────
-    init_logging()?;
-    let _ = dotenvy::dotenv();
 
-    // ── Tray icon (Windows) / no-op (other OS) ──────────────────────────
+    let _ = dotenvy::dotenv();
+    init_logging()?;
+
     daifo::tray::start_tray();
 
     // ── Build single-threaded tokio runtime ──────────────────────────────
@@ -29,7 +27,7 @@ fn main() -> eyre::Result<()> {
             _ = tray_exit_requested() => {
                 tracing::info!("exit notification received from tray thread.");
             },
-             res = daifo::app::run() => {
+             res = daifo::run() => {
                 res.wrap_err("Application error")?;
              }
         }

@@ -106,7 +106,7 @@ pub fn ensure_date_directory(
 
 /// Runs the full logic for a given date:
 /// 1. Creates (or ensures) the directory structure according to the template.
-/// 2. Creates the shortcut (.lnk) in the root directory if the configuration
+/// 2. Creates the directory symlink in the root directory if the configuration
 ///    enables it.
 /// 3. Checks whether the prints folder should be created.
 /// 4. If applicable, creates it.
@@ -119,15 +119,19 @@ pub fn run_for_date(
 ) -> Result<Option<PathBuf>, DaifoError> {
     let day_dir = ensure_date_directory(settings, date)?;
 
-    // Create shortcut to the day directory (if configured)
+    // Create directory symlink to the day directory (if configured).
+    // Symlink creation failures (e.g. missing admin permissions) are
+    // already logged at debug level inside ensure_link_for_date, so
+    // we don't re-log them here.
     if settings.create_link_to_daily_folder {
         if let Err(e) = ensure_link_for_date(settings, date, &day_dir) {
-            // We don't want a .lnk creation failure to stop the entire
-            // process. We log it and continue.
+            // Database persistence errors or other hard I/O errors still
+            // surface here; we log and continue so the rest of the
+            // processing isn't blocked.
             tracing::warn!(
                 error = %e,
                 date = %date.format("%Y-%m-%d"),
-                "Failed to create shortcut to the day directory"
+                "Failed to persist links database after symlink creation"
             );
         }
     }

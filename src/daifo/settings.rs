@@ -73,15 +73,15 @@ pub struct Settings {
     #[serde(default = "default_done_folder")]
     pub printed_folder_name: String,
 
-    /// If `true`, creates a shortcut (.lnk) to the day directory
-    /// in the root directory.  The shortcut name is a "flattened" version
+    /// If `true`, creates a directory symbolic link to the day directory
+    /// in the root directory.  The symlink name is a "flattened" version
     /// of the template where path separators are
-    /// replaced by dots.
+    /// replaced by dashes.
     #[serde(default = "default_create_link")]
     pub create_link_to_daily_folder: bool,
 
-    /// Additional directories where to copy the created shortcut.
-    /// Useful for duplicating the link to the Desktop or other locations.
+    /// Additional directories where to create a copy of the symlink.
+    /// Useful for placing the link on the Desktop or other locations.
     /// If a directory doesn't exist, it is simply skipped.
     #[serde(default = "default_duplicate_link_targets")]
     pub duplicate_daily_folder_link_to: Vec<String>,
@@ -173,8 +173,8 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     doc.insert("create_link_to_daily_folder", toml_edit::value(true));
     if let Some(mut key) = doc.key_mut("create_link_to_daily_folder") {
         key.leaf_decor_mut().set_prefix(
-            "# If true, creates a shortcut (.lnk) to the day día\n# in the \
-             root directory.  No administrator permissions administrador.\n",
+            "# If true, creates a directory symbolic link to the day\n# in \
+             the root directory. Requires admin or Developer Mode.\n",
         );
     }
 
@@ -186,9 +186,9 @@ fn build_default_toml_document() -> toml_edit::DocumentMut {
     );
     if let Some(mut key) = doc.key_mut("duplicate_daily_folder_link_to") {
         key.leaf_decor_mut().set_prefix(
-            "# Additional directories where to copy the shortcut (.lnk).\n# \
-             Example: [\"C:\\Users\\anton\\Desktop\"]\n# Si un directorio no \
-             existe, se omite sin error.\n",
+            "# Additional directories where to create a copy of the \
+             symlink.\n# Example: [\"C:\\Users\\anton\\Desktop\"]\n# Si un \
+             directorio no existe, se omite sin error.\n",
         );
     }
 

@@ -16,14 +16,5 @@ pub mod ops;
 pub mod settings;
 mod template;
 
-// Re-export public items so consumers don't need to know the internal
-// module structure.
-pub use error::DaifoError;
-pub use link::{
-    LINK_NAME_SEPARATOR, cleanup_stale_links, ensure_link_for_date,
-};
-pub use ops::{
-    ensure_date_directory, generate_date_path, run_for_date,
-    run_for_date_range, should_create_printed,
-};
-pub use settings::{Settings, load_or_create_settings};
+pub use link::cleanup_stale_links;
+pub use ops::{run_for_date, run_for_date_range};

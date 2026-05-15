@@ -1,15 +1,19 @@
-//! Creation of shortcuts (Windows .lnk) to the day directory
+//! Creation of directory symbolic links to the day directory
 //! and registration of them in a local database (JSON).
 //!
-//! Shortcuts are created in the root directory with a
+//! Symlinks are created in the root directory with a
 //! "flattened" name derived from the path template.
+//!
+//! On Windows, creating symbolic links typically requires
+//! administrator privileges or Developer Mode to be enabled.
+//! If the symlink cannot be created (e.g. due to missing
+//! permissions), the operation is logged at debug level and
+//! skipped gracefully so the rest of the execution can continue.
 
 use std::{
     collections::HashMap,
     io::Write,
-    os::windows::process::CommandExt,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use serde::{Deserialize, Serialize};
@@ -21,31 +25,24 @@ use super::{error::DaifoError, template::expand_template};
 // ---------------------------------------------------------------------------
 
 /// Character used to replace path separators (`/`, `\`) when
-/// flattening the shortcut name.
+/// flattening the symlink name.
 pub const LINK_NAME_SEPARATOR: char = '-';
 
-/// Extension added to the flattened name.
-const LINK_EXTENSION: &str = ".lnk";
-
-/// Default path for the file that stores the created links record.
+/// Default path for the file that stores the created symlinks record.
 const LINKS_DB_PATH: &str = "./.settings/printed_symlinks.json";
 
-// ---------------------------------------------------------------------------
-// Links database (JSON)
-// ---------------------------------------------------------------------------
-
-/// An entry in the created shortcuts record.
+/// An entry in the created symlinks record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LinkEntry {
-    /// Path of the `.lnk` file.
+    /// Path of the symlink.
     pub link_path: String,
-    /// Path of the directory the shortcut points to.
+    /// Path of the directory the symlink points to.
     pub target_path: String,
     /// Date it was created for (ISO: `YYYY-MM-DD`).
     pub created_date: String,
 }
 
-/// Lightweight JSON database that records the created shortcuts.
+/// Lightweight JSON database that records the created symlinks.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct LinksDatabase {
     pub links: Vec<LinkEntry>,
@@ -89,8 +86,8 @@ impl LinksDatabase {
     pub fn insert(&mut self, entry: LinkEntry) { self.links.push(entry); }
 
     /// Removes entries whose target directory no longer exists, or whose
-    /// date is before today. Also deletes the corresponding `.lnk`
-    /// file if it is still present.
+    /// date is before today. Also deletes the corresponding symlink
+    /// if it is still present.
     ///
     /// Returns the number of removed entries.
     pub fn cleanup_stale(&mut self, today: chrono::NaiveDate) -> usize {
@@ -114,7 +111,12 @@ impl LinksDatabase {
             if target_gone || is_old {
                 let link = Path::new(&entry.link_path);
                 if link.exists() {
-                    let _ = std::fs::remove_file(link);
+                    // Try to remove as a directory symlink first,
+                    // then fall back to file removal for legacy .lnk
+                    // shortcuts that may still exist.
+                    if std::fs::remove_dir(link).is_err() {
+                        let _ = std::fs::remove_file(link);
+                    }
                 }
                 removed += 1;
             } else {
@@ -135,13 +137,13 @@ impl LinksDatabase {
 /// each separator (`/` or `\`) with [`LINK_NAME_SEPARATOR`].
 ///
 /// Consecutive separators are collapsed into a single replacement
-/// character. The `.lnk` extension is appended to the result.
+/// character.
 ///
 /// # Example
 ///
 /// ```ignore
 /// let name = flatten_link_name("./2025/01 enero/15");
-/// assert_eq!(name, "2025-01 enero-15.lnk");
+/// assert_eq!(name, "2025-01 enero-15");
 /// ```
 pub fn flatten_link_name(raw: &str) -> String {
     // Remove "./" or ".\" prefix before processing
@@ -150,7 +152,7 @@ pub fn flatten_link_name(raw: &str) -> String {
         .or_else(|| raw.strip_prefix(".\\"))
         .unwrap_or(raw);
 
-    let mut result = String::with_capacity(raw.len() + LINK_EXTENSION.len());
+    let mut result = String::with_capacity(raw.len());
     let mut prev_was_sep = false;
 
     for ch in raw.chars() {
@@ -159,7 +161,7 @@ pub fn flatten_link_name(raw: &str) -> String {
                 result.push(LINK_NAME_SEPARATOR);
                 prev_was_sep = true;
             }
-        } else if ch == '.' {
+        } else if ch == LINK_NAME_SEPARATOR {
             if !prev_was_sep {
                 result.push(ch);
                 prev_was_sep = true;
@@ -175,10 +177,10 @@ pub fn flatten_link_name(raw: &str) -> String {
         .strip_prefix(&format!("{LINK_NAME_SEPARATOR}"))
         .unwrap_or(&result);
 
-    format!("{trimmed}{LINK_EXTENSION}")
+    trimmed.to_string()
 }
 
-/// Generates the flattened name of the shortcut from the path template
+/// Generates the flattened name of the symlink from the path template
 /// and the date.
 pub fn make_link_name(
     template: &str,
@@ -190,14 +192,18 @@ pub fn make_link_name(
 }
 
 // ---------------------------------------------------------------------------
-// Shortcut creation (.lnk) via PowerShell (without admin)
+// Directory symlink creation
 // ---------------------------------------------------------------------------
 
-/// Creates a Windows shortcut (`.lnk`) that points to `target`.
+/// Creates a directory symbolic link that points to `target`.
 ///
-/// Uses PowerShell with `WScript.Shell` to create the `.lnk` file
-/// **without** requiring administrator permissions.
-pub fn create_shell_link(
+/// Uses [`std::os::windows::fs::symlink_dir`] on Windows.
+/// **Requires administrator privileges or Developer Mode** to be
+/// enabled; if the operation fails for that reason, the caller should
+/// log the error at debug level and continue.
+///
+/// Returns `Ok(())` on success, or `Err` with the I/O reason.
+pub fn create_directory_symlink(
     target: &Path,
     link_path: &Path,
 ) -> Result<(), DaifoError> {
@@ -209,45 +215,44 @@ pub fn create_shell_link(
         std::env::current_dir()?.join(link_path)
     };
 
-    let ps_script = format!(
-        r#"
-$WScriptShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WScriptShell.CreateShortcut('{link}')
-$Shortcut.TargetPath = '{target}'
-$Shortcut.Save()
-"#,
-        link = link_abs.to_str().unwrap_or("").replace('\'', "''"),
-        target = target_abs.to_str().unwrap_or("").replace('\'', "''"),
-    );
-
-    let output = Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &ps_script])
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .output()
-        .map_err(|e| DaifoError::Io(e))?;
-
-    if output.status.success() {
-        Ok(())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(DaifoError::SymlinkCreationFailed(stderr.trim().to_string()))
+    // If the link already exists, remove it first so we can replace it.
+    if link_abs.exists() {
+        // Try directory first (for existing symlinks), then file
+        // (for legacy .lnk files that might occupy the name).
+        if std::fs::remove_dir(&link_abs).is_err() {
+            std::fs::remove_file(&link_abs)?;
+        }
     }
+
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_dir(&target_abs, &link_abs)?;
+    }
+    #[cfg(not(windows))]
+    {
+        std::os::unix::fs::symlink(&target_abs, &link_abs)?;
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------------
 
-/// Creates the shortcut to the day directory (if the configuration allows
-/// it) and registers it in the database.
+/// Creates the directory symlink to the day directory (if the
+/// configuration allows it) and registers it in the database.
 ///
-/// Also copies the `.lnk` to each path listed in
+/// Also creates a symlink at each path listed in
 /// `duplicate_daily_folder_link_to` (for example, the Desktop).
 /// If a target directory does not exist, it is silently skipped.
 ///
-/// Returns `Some(link_path)` with the path of the primary link if it was
-/// created, or `None` if the configuration disables it or the link already
-/// existed.
+/// If symlink creation fails (e.g. due to missing admin permissions),
+/// the error is logged at **debug** level and execution continues.
+///
+/// Returns `Some(link_path)` with the path of the primary symlink if it
+/// was created, or `None` if the configuration disables it or the symlink
+/// already existed.
 pub fn ensure_link_for_date(
     settings: &super::settings::Settings,
     date: chrono::NaiveDate,
@@ -267,10 +272,22 @@ pub fn ensure_link_for_date(
     let mut db = LinksDatabase::load();
     let mut any_created = false;
 
-    // ── Primary link (in the root directory) ──────────────────────────
+    // Primary symlink (in the root directory)
     if !link_path.exists() {
-        create_shell_link(day_dir, &link_path)?;
-        any_created = true;
+        match create_directory_symlink(day_dir, &link_path) {
+            Ok(()) => {
+                any_created = true;
+            }
+            Err(e) => {
+                tracing::debug!(
+                    error = %e,
+                    link = %link_path.display(),
+                    target = %day_dir.display(),
+                    "Failed to create directory symlink (missing \
+                     permissions?); skipping"
+                );
+            }
+        }
     }
     if !db.links.iter().any(|e| e.link_path == link_path.to_string_lossy()) {
         db.insert(LinkEntry {
@@ -280,7 +297,7 @@ pub fn ensure_link_for_date(
         });
     }
 
-    // ── Duplicates in additional paths ───────────────────────────────────
+    // Duplicates in additional paths
     for dup_root in &settings.duplicate_daily_folder_link_to {
         let dup_dir = Path::new(dup_root);
         if !dup_dir.is_dir() {
@@ -289,6 +306,7 @@ pub fn ensure_link_for_date(
 
         let dup_path = dup_dir.join(&link_name);
         if dup_path.exists() {
+            // If the link already exists, we assume it's correct and skip it.
             if !db
                 .links
                 .iter()
@@ -303,16 +321,21 @@ pub fn ensure_link_for_date(
             continue;
         }
 
-        if let Err(e) = std::fs::copy(&link_path, &dup_path) {
-            tracing::warn!(
-                error = %e,
-                src = %link_path.display(),
-                dst = %dup_path.display(),
-                "Failed to copy shortcut to duplicate path"
-            );
-            continue;
+        match create_directory_symlink(day_dir, &dup_path) {
+            Ok(()) => {
+                any_created = true;
+            }
+            Err(e) => {
+                tracing::debug!(
+                    error = %e,
+                    link = %dup_path.display(),
+                    target = %day_dir.display(),
+                    "Failed to create duplicate directory symlink \
+                     (missing permissions?); skipping"
+                );
+                continue;
+            }
         }
-        any_created = true;
 
         db.insert(LinkEntry {
             link_path: dup_path.to_string_lossy().to_string(),
@@ -347,36 +370,36 @@ mod tests {
     #[test]
     fn test_flatten_basic() {
         let name = flatten_link_name("./2025/01 enero/15");
-        assert_eq!(name, "2025-01 enero-15.lnk");
+        assert_eq!(name, "2025-01 enero-15");
     }
 
     #[test]
     fn test_flatten_consecutive_separators() {
         let name = flatten_link_name("2026//06 junio");
-        assert_eq!(name, "2026-06 junio.lnk");
+        assert_eq!(name, "2026-06 junio");
     }
 
     #[test]
     fn test_flatten_backslashes() {
         let name = flatten_link_name(r"2026\06 junio\15");
-        assert_eq!(name, "2026-06 junio-15.lnk");
+        assert_eq!(name, "2026-06 junio-15");
     }
 
     #[test]
     fn test_flatten_mixed_separators() {
         let name = flatten_link_name("2026/06 junio\\15");
-        assert_eq!(name, "2026-06 junio-15.lnk");
+        assert_eq!(name, "2026-06 junio-15");
     }
 
     #[test]
     fn test_flatten_no_separators() {
         let name = flatten_link_name("2026");
-        assert_eq!(name, "2026.lnk");
+        assert_eq!(name, "2026");
     }
 
     #[test]
     fn test_flatten_consecutive_dots_deduplicated() {
         let name = flatten_link_name("2026.. 06 June");
-        assert_eq!(name, "2026. 06 June.lnk");
+        assert_eq!(name, "2026. 06 June");
     }
 }
