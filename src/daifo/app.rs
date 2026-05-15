@@ -285,6 +285,7 @@ async fn run_continuous_loop(settings: &Settings, interval: Duration) {
                 "sleeping until next day."
             );
             sleep(Duration::from_secs(until_midnight)).await;
+            continue;
         }
 
         // Sleep until the next check.
