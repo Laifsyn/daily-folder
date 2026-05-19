@@ -5,6 +5,10 @@ use std::os::windows::ffi::OsStrExt;
 /// Returns `true` if already elevated.
 /// Otherwise re-launches via UAC (`ShellExecuteW` with `"runas"`)
 /// and exits the current (non-admin) process.
+///
+/// # References
+///
+/// - [Microsoft documentation for ShellExecuteW](https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew)
 pub fn try_ensure_admin() -> Result<bool, isize> {
     if !cfg!(windows) {
         return Ok(false);
@@ -44,7 +48,6 @@ pub fn try_ensure_admin() -> Result<bool, isize> {
     // ShellExecuteW returns a value > 32 on success.
     let code: isize = result.0 as isize;
     if code <= 32 {
-        tracing::warn!("Failed to relaunch as admin (error code: {code})",);
         return Err(code);
     }
 
