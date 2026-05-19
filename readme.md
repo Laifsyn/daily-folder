@@ -10,7 +10,7 @@ accumulate or a trigger extension (`.pdf`, `.png`) appears.
 ```sh
 # Create config and run once
 daifo --once
-# Edit .settings/daifo.toml to match your paths, then…
+# Edit .setting/daifo.toml to match your paths, then…
 daifo                   # continuous mode (daemon)
 ```
 
@@ -23,7 +23,7 @@ daifo                   # continuous mode (daemon)
 | `daifo --date 2025-03-15`   | Processes a single date          |
 | `daifo --start .. --end ..` | Back-fills a date range          |
 
-## Configuration (`.settings/daifo.toml`)
+## Configuration (`.setting/daifo.toml`)
 
 ```toml
 root_directory = "D:/ftp"

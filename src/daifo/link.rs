@@ -29,7 +29,7 @@ use super::{error::DaifoError, template::expand_template};
 pub const LINK_NAME_SEPARATOR: char = '-';
 
 /// Default path for the file that stores the created symlinks record.
-const LINKS_DB_PATH: &str = "./.settings/printed_symlinks.json";
+const LINKS_DB_PATH: &str = "./.setting/printed_symlinks.json";
 
 /// An entry in the created symlinks record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -92,7 +92,7 @@ impl LinksDatabase {
     /// Returns the number of removed entries.
     pub fn cleanup_stale(&mut self, today: chrono::NaiveDate) -> usize {
         let mut removed = 0;
-        let mut surviving = Vec::new();
+        let mut surviving = Vec::<LinkEntry>::new();
 
         for entry in self.links.drain(..) {
             let target = Path::new(&entry.target_path);
@@ -173,7 +173,7 @@ pub fn flatten_link_name(raw: &str) -> String {
     }
 
     // Remove a possible leading separator (e.g. "-2025..." → "2025...")
-    let trimmed = result
+    let trimmed: &str = result
         .strip_prefix(&format!("{LINK_NAME_SEPARATOR}"))
         .unwrap_or(&result);
 
@@ -187,7 +187,7 @@ pub fn make_link_name(
     date: chrono::NaiveDate,
     month_names: &HashMap<String, String>,
 ) -> String {
-    let expanded = expand_template(template, date, month_names);
+    let expanded: String = expand_template(template, date, month_names);
     flatten_link_name(&expanded)
 }
 

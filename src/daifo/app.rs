@@ -47,7 +47,7 @@ pub struct Cli {
     /// Path to the TOML configuration file.
     #[arg(
         long,
-        default_value = "./.settings/daifo.toml",
+        default_value = "./.setting/daifo.toml",
         env = "PRINTED_SETTINGS_FILE"
     )]
     pub settings_file: PathBuf,

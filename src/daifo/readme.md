@@ -42,7 +42,7 @@ cargo build --release
 | Option             | Environment Variable      | Description                                                                                   |
 | ------------------ | ------------------------- | --------------------------------------------------------------------------------------------- |
 | `--root-directory` | `PRINTED_ROOT_DIRECTORY` | Root directory where the date structure is created. Overrides what is defined in the `.toml`. |
-| `--settings-file`  | `PRINTED_SETTINGS_FILE`  | Path to the `.toml` configuration file. Default: `./.settings/daifo.toml`.                 |
+| `--settings-file`  | `PRINTED_SETTINGS_FILE`  | Path to the `.toml` configuration file. Default: `./.setting/daifo.toml`.                 |
 | `--date`           | `PRINTED_DATE`           | **(Admin)** Single date to process (`YYYY-MM-DD`). The program exits after processing it.     |
 | `--start`          | `PRINTED_START`          | **(Admin)** Start of backfill range (`YYYY-MM-DD`). Use with `--end`.                         |
 | `--end`            | `PRINTED_END`            | **(Admin)** End of backfill range (`YYYY-MM-DD`). Use with `--start`.                         |
@@ -60,7 +60,7 @@ cargo build --release
 
 ## Configuration File
 
-When running the program for the first time, `./.settings/daifo.toml`
+When running the program for the first time, `./.setting/daifo.toml`
 is automatically created with default values and explanatory comments.
 
 ### Fields
