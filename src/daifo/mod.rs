@@ -9,6 +9,7 @@
 //! File system operations are synchronous and must be executed inside
 //! `spawn_blocking` by the application layer.
 
+mod admin;
 pub mod app;
 pub mod error;
 pub mod link;
@@ -16,5 +17,6 @@ pub mod ops;
 pub mod settings;
 mod template;
 
+pub use admin::{is_admin, try_ensure_admin};
 pub use link::cleanup_stale_links;
 pub use ops::{run_for_date, run_for_date_range};

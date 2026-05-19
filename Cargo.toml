@@ -32,5 +32,6 @@ tray-icon = { version = "0.24", default-features = false }
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_System_Console",
+  "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }

@@ -20,6 +20,7 @@ use windows::Win32::{
 
 const ID_SHOW_HIDE: &str = "show_hide";
 const ID_EXIT: &str = "exit";
+const ID_RESTART_AS_ADMIN: &str = "restart_as_admin";
 
 /// A global notification that the tray thread can use to signal that an exit
 /// has been requested.
@@ -74,8 +75,15 @@ fn tray_thread() -> Result<(), String> {
         None
     };
     let exit_item = MenuItem::with_id(ID_EXIT, "Exit", true, None);
+    let restart_as_admin = MenuItem::with_id(
+        ID_RESTART_AS_ADMIN,
+        "Restart as Administrator",
+        !crate::daifo::is_admin(),
+        None,
+    );
 
     let menu = Menu::new();
+    menu.append(&restart_as_admin).ok();
     if let Some(ref item) = show_hide_item {
         menu.append(item).ok();
     }
@@ -123,6 +131,19 @@ fn tray_thread() -> Result<(), String> {
                             item.set_text("Hide console");
                         }
                     }
+                }
+                ID_RESTART_AS_ADMIN => {
+                    tracing::debug!(
+                        "restart as admin requested from tray menu"
+                    );
+                    crate::daifo::try_ensure_admin()
+                        .inspect_err(|err_code| {
+                            tracing::warn!(
+                                error_code = err_code,
+                                "Failed to restart as admin"
+                            );
+                        })
+                        .ok();
                 }
                 ID_EXIT => {
                     tracing::debug!("exit requested from tray menu");
